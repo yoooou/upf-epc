@@ -110,6 +110,7 @@ class ExactMatch final : public Module {
   ExactMatchField *getVals() { return values_; };
   Error gather_value(const ExactMatchRuleFields &fields, ExactMatchKey *key) {
     if (fields.size() != num_values_) {
+    	    std::cerr << "fields.size() != num_values_ ." << std::endl;
       return std::make_pair(
           EINVAL, bess::utils::Format("rule should have %zu fields (has %zu)",
                                       num_values_, fields.size()));
@@ -124,6 +125,7 @@ class ExactMatch final : public Module {
       const std::vector<uint8_t> &f_obj = fields[i];
 
       if (static_cast<size_t>(field_size) != f_obj.size()) {
+	      std::cerr << "fields.size != f_obj.size() ." << std::endl;
         return std::make_pair(
             EINVAL,
             bess::utils::Format("rule field %zu should have size %d (has %zu)",
@@ -226,10 +228,12 @@ class ExactMatch final : public Module {
     Error err;
 
     if (values.size() == 0) {
+	    std::cerr << "values size was 0." << std::endl;
       return std::make_pair(EINVAL, "rule has no values");
     }
 
     if ((err = gather_value(values, &v)).first != 0) {
+	    	    std::cerr << "gather_value failed." << std::endl;
       return err;
     }
 

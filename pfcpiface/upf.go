@@ -44,10 +44,10 @@ const (
 
 type pdr struct {
 	srcIface     uint8
-	tunnelIP4Dst uint32
+	tunnelIP4Dst net.IP
 	eNBTeid      uint32
-	srcIP        uint32
-	dstIP        uint32
+	srcIP        net.IP
+	dstIP        net.IP
 	srcPort      uint16
 	dstPort      uint16
 	proto        uint8
@@ -74,14 +74,18 @@ type far struct {
 
 	action      uint8
 	tunnelType  uint8
-	s1uIP       uint32
-	eNBIP       uint32
+	s1uIP       net.IP
+	eNBIP       net.IP
 	eNBTeid     uint32
 	UDPGTPUPort uint16
 }
 
 var intEnc = func(u uint64) *pb.FieldData {
 	return &pb.FieldData{Encoding: &pb.FieldData_ValueInt{ValueInt: u}}
+}
+
+var binEnc = func(b []byte) *pb.FieldData {
+	return &pb.FieldData{Encoding: &pb.FieldData_ValueBin{ValueBin: b}}
 }
 
 func (u *upf) sim(method string) {
@@ -93,21 +97,21 @@ func (u *upf) sim(method string) {
 	//const ueip, teid, enbip = 0x10000001, 0xf0000000, 0x0b010181
 	ueip, teid, enbip := net.ParseIP(u.simInfo.StartUeIP), hex2int(u.simInfo.StartTeid), net.ParseIP(u.simInfo.StartEnodeIP)
 	const ng4tMaxUeRan, ng4tMaxEnbRan = 500000, 80
-	s1uip := ip2int(u.n3IP)
+	s1uip := u.n3IP
 
 	for i := uint32(0); i < u.maxSessions; i++ {
 		// NG4T-based formula to calculate enodeB IP address against a given UE IP address
 		// il_trafficgen also uses the same scheme
 		// See SimuCPEnbv4Teid(...) in ngic code for more details
-		ueOfRan := i % ng4tMaxUeRan
-		ran := i / ng4tMaxUeRan
-		enbOfRan := ueOfRan % ng4tMaxEnbRan
-		enbIdx := ran*ng4tMaxEnbRan + enbOfRan
+		//ueOfRan := i % ng4tMaxUeRan
+		//ran := i / ng4tMaxUeRan
+		//enbOfRan := ueOfRan % ng4tMaxEnbRan
+		//enbIdx := ran*ng4tMaxEnbRan + enbOfRan
 
 		// create/delete downlink pdr
 		pdrDown := pdr{
 			srcIface:     core,
-			srcIP:        ip2int(ueip) + i,
+			srcIP:        ueip,
 			srcIfaceMask: 0xFF,
 			srcIPMask:    0xFFFFFFFF,
 			fseID:        teid + i,
@@ -119,7 +123,7 @@ func (u *upf) sim(method string) {
 		pdrUp := pdr{
 			srcIface:     access,
 			eNBTeid:      teid + i,
-			dstIP:        ip2int(ueip) + i,
+			dstIP:        ueip,
 			srcIfaceMask: 0xFF,
 			eNBTeidMask:  0xFFFFFFFF,
 			dstIPMask:    0xFFFFFFFF,
@@ -135,7 +139,7 @@ func (u *upf) sim(method string) {
 			action:      farTunnel,
 			tunnelType:  0x1,
 			s1uIP:       s1uip,
-			eNBIP:       ip2int(enbip) + enbIdx,
+			eNBIP:       enbip,
 			eNBTeid:     teid + i,
 			UDPGTPUPort: udpGTPUPort,
 		}
@@ -157,6 +161,8 @@ func (u *upf) sim(method string) {
 		default:
 			log.Fatalln("Unsupported method", method)
 		}
+		ueip = increment(ueip)
+		enbip = increment(enbip)
 	}
 	u.resumeAll()
 
@@ -272,14 +278,14 @@ func (u *upf) addPDR(ctx context.Context, done chan<- bool, p pdr) {
 			Gate:     1,
 			Priority: 1,
 			Values: []*pb.FieldData{
-				intEnc(uint64(p.srcIface)),     /* src_iface */
-				intEnc(uint64(p.tunnelIP4Dst)), /* tunnel_ipv4_dst */
-				intEnc(uint64(p.eNBTeid)),      /* enb_teid */
-				intEnc(uint64(p.srcIP)),        /* ueaddr ip*/
-				intEnc(uint64(p.dstIP)),        /* inet ip */
-				intEnc(uint64(p.srcPort)),      /* ue port */
-				intEnc(uint64(p.dstPort)),      /* inet port */
-				intEnc(uint64(p.proto)),        /* proto id */
+				intEnc(uint64(p.srcIface)),   /* src_iface */
+				binEnc(p.tunnelIP4Dst.To4()), /* tunnel_ipv4_dst */
+				intEnc(uint64(p.eNBTeid)),    /* enb_teid */
+				binEnc(p.srcIP.To4()),        /* ueaddr ip*/
+				binEnc(p.dstIP.To4()),        /* inet ip */
+				intEnc(uint64(p.srcPort)),    /* ue port */
+				intEnc(uint64(p.dstPort)),    /* inet port */
+				intEnc(uint64(p.proto)),      /* proto id */
 			},
 			Masks: []*pb.FieldData{
 				intEnc(uint64(p.srcIfaceMask)),     /* src_iface-mask */
@@ -317,14 +323,14 @@ func (u *upf) delPDR(ctx context.Context, done chan<- bool, p pdr) {
 
 		f := &pb.WildcardMatchCommandDeleteArg{
 			Values: []*pb.FieldData{
-				intEnc(uint64(p.srcIface)),     /* src_iface */
-				intEnc(uint64(p.tunnelIP4Dst)), /* tunnel_ipv4_dst */
-				intEnc(uint64(p.eNBTeid)),      /* enb_teid */
-				intEnc(uint64(p.srcIP)),        /* ueaddr ip*/
-				intEnc(uint64(p.dstIP)),        /* inet ip */
-				intEnc(uint64(p.srcPort)),      /* ue port */
-				intEnc(uint64(p.dstPort)),      /* inet port */
-				intEnc(uint64(p.proto)),        /* proto id */
+				intEnc(uint64(p.srcIface)),   /* src_iface */
+				binEnc(p.tunnelIP4Dst.To4()), /* tunnel_ipv4_dst */
+				intEnc(uint64(p.eNBTeid)),    /* enb_teid */
+				binEnc(p.srcIP.To4()),        /* ueaddr ip*/
+				binEnc(p.dstIP.To4()),        /* inet ip */
+				intEnc(uint64(p.srcPort)),    /* ue port */
+				intEnc(uint64(p.dstPort)),    /* inet port */
+				intEnc(uint64(p.proto)),      /* proto id */
 			},
 			Masks: []*pb.FieldData{
 				intEnc(uint64(p.srcIfaceMask)),     /* src_iface-mask */
@@ -376,8 +382,8 @@ func (u *upf) addFAR(ctx context.Context, done chan<- bool, far far) {
 			Values: []*pb.FieldData{
 				intEnc(uint64(far.action)),      /* action */
 				intEnc(uint64(far.tunnelType)),  /* tunnel_out_type */
-				intEnc(uint64(far.s1uIP)),       /* s1u-ip */
-				intEnc(uint64(far.eNBIP)),       /* enb ip */
+				binEnc(far.s1uIP.To4()),         /* s1u-ip */
+				binEnc(far.eNBIP.To4()),         /* enb ip */
 				intEnc(uint64(far.eNBTeid)),     /* enb teid */
 				intEnc(uint64(far.UDPGTPUPort)), /* udp gtpu port */
 			},

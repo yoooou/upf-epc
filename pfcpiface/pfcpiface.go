@@ -108,7 +108,7 @@ func parsePDRFromPFCPSessEstReqPayload(sereq *message.SessionEstablishmentReques
 				pdrU := pdr{
 					srcIface:     access,
 					eNBTeid:      teid,
-					dstIP:        ip2int(ueIP4),
+					dstIP:        ueIP4,
 					srcIfaceMask: 0xFF,
 					eNBTeidMask:  0xFFFFFFFF,
 					dstIPMask:    0xFFFFFFFF,
@@ -122,7 +122,7 @@ func parsePDRFromPFCPSessEstReqPayload(sereq *message.SessionEstablishmentReques
 			} else if srcIface == ie.SrcInterfaceCore {
 				pdrD := pdr{
 					srcIface:     core,
-					srcIP:        ip2int(ueIP4),
+					srcIP:        ueIP4,
 					srcIfaceMask: 0xFF,
 					srcIPMask:    0xFFFFFFFF,
 					pdrID:        uint32(pdrID),
@@ -395,8 +395,8 @@ func handleSessionModificationRequest(upf *upf, msg message.Message, addr net.Ad
 									fseID:       uint32(fseid), // fseID currently being truncated to uint32 <--- FIXIT/TODO/XXX
 									action:      farTunnel,
 									tunnelType:  0x1,
-									s1uIP:       ip2int(s1uIP4),
-									eNBIP:       ip2int(eNBIP),
+									s1uIP:       s1uIP4,
+									eNBIP:       eNBIP,
 									eNBTeid:     eNBTeid,
 									UDPGTPUPort: udpGTPUPort,
 								}

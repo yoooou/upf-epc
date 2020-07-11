@@ -238,8 +238,14 @@ Error ExactMatch::AddRule(const bess::pb::ExactMatchCommandAddArg &arg) {
   if (arg.values_size() > 0) {
     RuleFieldsFromPb(arg.values(), &action, VALUE_TYPE);
 
-    if ((err = CreateValue(t.action, action)).first != 0)
+    if ((err = CreateValue(t.action, action)).first != 0) {
+	    std::cerr << "Unable to create values!!" << std::endl;
+    return std::make_pair(
+        EINVAL, bess::utils::Format(
+                    "Failed to create values. Need %d, has %d",
+                    (int)num_values(), arg.values_size()));
       return err;
+    }
   }
 
   return table_.AddRule(t, rule);
