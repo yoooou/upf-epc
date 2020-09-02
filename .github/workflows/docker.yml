@@ -8,7 +8,7 @@ on:
 jobs:
   build:
     env:
-      DOCKER_REGISTRY: "docker.pkg.github.com/omec-project/"
+      DOCKER_REGISTRY: "ghcr.io/omec-project/"
       DOCKER_REPOSITORY: "upf-epc/"
     runs-on: ubuntu-latest
     steps:
@@ -19,7 +19,7 @@ jobs:
         USERNAME: ${{ github.actor }}
         PASSWORD: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        echo $PASSWORD | docker login https://docker.pkg.github.com -u $USERNAME --password-stdin
+        echo $PASSWORD | docker login ghcr.io -u USERNAME --password-stdin
     - name: Build and push Docker image
       run: |
         make docker-build
