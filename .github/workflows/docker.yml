@@ -15,11 +15,8 @@ jobs:
     # Checkout and build
     - uses: actions/checkout@v2.3.2
     - name: Docker login GH packages
-      env:
-        USERNAME: ${{ github.actor }}
-        PASSWORD: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        echo $PASSWORD | docker login ghcr.io -u USERNAME --password-stdin
+        echo ${{ secrets.CR_PAT }} | docker login ghcr.io -u krsna1729 --password-stdin
     - name: Build and push Docker image
       run: |
         make docker-build
