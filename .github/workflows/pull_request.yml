@@ -64,11 +64,8 @@ jobs:
           author: "Github Actions <actions@github>"
           commit-message: "Actions: Updated with changes from CI"
       - name: Docker login GH packages
-        env:
-          USERNAME: ${{ github.actor }}
-          PASSWORD: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo $PASSWORD | docker login ghcr.io -u $USERNAME --password-stdin
+          echo ${{ secrets.CR_PAT }} | docker login ghcr.io -u krsna1729 --password-stdin
       - name: Push Docker image
         run: |
           make docker-push
