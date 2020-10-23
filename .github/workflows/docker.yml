@@ -9,7 +9,7 @@ jobs:
   build:
     env:
       DOCKER_REGISTRY: "ghcr.io/omec-project/"
-      DOCKER_REPOSITORY: "upf-epc/"
+      DOCKER_REPOSITORY: ""
     runs-on: ubuntu-latest
     steps:
     # Checkout and build
