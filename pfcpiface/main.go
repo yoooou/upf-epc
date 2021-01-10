@@ -13,8 +13,6 @@ import (
 	"os"
 
 	fqdn "github.com/Showmax/go-fqdn"
-	pb "github.com/omec-project/upf-epc/pfcpiface/bess_pb"
-	"google.golang.org/grpc"
 )
 
 const (
@@ -22,11 +20,11 @@ const (
 )
 
 var (
-	bess       = flag.String("bess", "localhost:10514", "BESS IP/port combo")
 	configPath = flag.String("config", "upf.json", "path to upf config")
 	httpAddr   = flag.String("http", "0.0.0.0:8080", "http IP/port combo")
 	simulate   = flag.String("simulate", "", "create|delete simulated sessions")
 	pfcpsim    = flag.Bool("pfcpsim", false, "simulate PFCP")
+	n4SrcIPStr = flag.String("n4SrcIPStr", "", "N4Interface IP")
 )
 
 // Conf : Json conf struct
@@ -36,6 +34,8 @@ type Conf struct {
 	AccessIface IfaceType   `json:"access"`
 	CoreIface   IfaceType   `json:"core"`
 	CPIface     CPIfaceInfo `json:"cpiface"`
+	P4rtcIface  P4rtcInfo   `json:"p4rtciface"`
+	EnableP4rt  bool        `json:"enable_p4rt"`
 	SimInfo     SimModeInfo `json:"sim"`
 }
 
@@ -84,6 +84,16 @@ func ParseJSON(filepath *string, conf *Conf) {
 	}
 }
 
+// ParseStrIP : parse IP address from config
+func ParseStrIP(n3name string) (net.IP, net.IPMask) {
+	ip, ipNet, err := net.ParseCIDR(n3name)
+	if err != nil {
+		log.Fatalln("Unable to parse IP: ", err)
+	}
+	log.Println("IP: ", ip)
+	return ip, (ipNet).Mask
+}
+
 // ParseIP : parse IP address from the interface name
 func ParseIP(name string, iface string) net.IP {
 	byNameInterface, err := net.InterfaceByName(name)
@@ -110,15 +120,17 @@ func main() {
 
 	// cmdline args
 	flag.Parse()
-
-	// read and parse json startup file
 	var conf Conf
+	var intf fastPath
+	// read and parse json startup file
 	ParseJSON(configPath, &conf)
 	log.Println(conf)
 
-	accessIP := ParseIP(conf.AccessIface.IfName, "Access")
-	coreIP := ParseIP(conf.CoreIface.IfName, "Core")
-	n4SrcIP := net.ParseIP("0.0.0.0")
+	if conf.EnableP4rt {
+		intf = &p4rtc{}
+	} else {
+		intf = &bess{}
+	}
 
 	// fetch fqdn. Prefer json field
 	fqdnh := conf.CPIface.FQDNHost
@@ -126,23 +138,15 @@ func main() {
 		fqdnh = fqdn.Get()
 	}
 
-	// get bess grpc client
-	conn, err := grpc.Dial(*bess, grpc.WithInsecure())
-	if err != nil {
-		log.Fatalln("did not connect:", err)
-	}
-	defer conn.Close()
-
 	upf := &upf{
 		accessIface: conf.AccessIface.IfName,
 		coreIface:   conf.CoreIface.IfName,
-		accessIP:    accessIP,
-		coreIP:      coreIP,
 		fqdnHost:    fqdnh,
-		client:      pb.NewBESSControlClient(conn),
 		maxSessions: conf.MaxSessions,
-		simInfo:     &conf.SimInfo,
+		intf:        intf,
 	}
+
+	upf.setUpfInfo(&conf)
 
 	if *pfcpsim {
 		pfcpSim()
@@ -158,24 +162,15 @@ func main() {
 		upf.sim(*simulate)
 		return
 	}
+	log.Println("N4 local IP: ", upf.n4SrcIP.String())
+	log.Println("Access IP: ", upf.accessIP.String())
+	log.Println("Core IP: ", upf.coreIP.String())
 
-	if conf.CPIface.SrcIP == "" {
-		if conf.CPIface.DestIP != "" {
-			log.Println("Dest address ", conf.CPIface.DestIP)
-			n4SrcIP = getLocalIP(conf.CPIface.DestIP)
-			log.Println("SPGWU/UPF address IP: ", n4SrcIP.String())
-		}
-	} else {
-		addrs, err := net.LookupHost(conf.CPIface.SrcIP)
-		if err == nil {
-			n4SrcIP = net.ParseIP(addrs[0])
-		}
-	}
-
-	log.Println("N4 local IP: ", n4SrcIP.String())
-
-	go pfcpifaceMainLoop(upf, accessIP.String(), coreIP.String(), n4SrcIP.String(), conf.CPIface.DestIP)
+	go pfcpifaceMainLoop(upf, upf.accessIP.String(),
+		upf.coreIP.String(), upf.n4SrcIP.String(),
+		conf.CPIface.DestIP)
 
 	setupProm(upf)
 	log.Fatal(http.ListenAndServe(*httpAddr, nil))
+	upf.exit()
 }

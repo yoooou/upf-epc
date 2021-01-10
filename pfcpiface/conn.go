@@ -69,10 +69,8 @@ func pfcpifaceMainLoop(upf *upf, accessIP, coreIP, sourceIP, smfName string) {
 
 	// cleanup the pipeline
 	cleanupSessions := func() {
-		if cpConnected {
-			sendDeleteAllSessionsMsgtoUPF(upf)
-			cpConnected = false
-		}
+		sendDeleteAllSessionsMsgtoUPF(upf)
+		cpConnected = false
 	}
 	// initiate connection if smf address available
 	log.Println("calling manageSmfConnection smf service name ", smfName)
@@ -127,7 +125,9 @@ func pfcpifaceMainLoop(upf *upf, accessIP, coreIP, sourceIP, smfName string) {
 		var outgoingMessage []byte
 		switch msg.MessageType() {
 		case message.MsgTypeAssociationSetupRequest:
-			outgoingMessage = pconn.handleAssociationSetupRequest(msg, addr, sourceIP, accessIP, coreIP)
+			cleanupSessions()
+			upf.setInfo(conn, addr, &pconn)
+			outgoingMessage = pconn.handleAssociationSetupRequest(upf, msg, addr, sourceIP, accessIP, coreIP)
 			if outgoingMessage != nil {
 				cpConnected = true
 				if manageConnection {
